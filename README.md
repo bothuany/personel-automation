@@ -1,48 +1,74 @@
 # Automation Server
 
-Bu sunucu VS Code ve Spotify'ı otomatik olarak açmak için kullanılır.
+A Node.js server that provides automation for quickly starting your development environment. It can automatically open VS Code and Spotify with your favorite playlist.
 
-## Otomatik Başlatma Ayarları
+## Features
 
-Sunucuyu bilgisayar başlangıcında otomatik olarak başlatmak için:
+- Open VS Code with a single HTTP request
+- Launch Spotify with a configured playlist
+- Windows notifications when automation is triggered
+- Configurable port and playlist ID
 
-### Yöntem 1: Windows Başlangıç Klasörüne Kısayol Eklemek
+## Installation
 
-1. `Win + R` tuşlarına basın ve `shell:startup` yazıp Enter'a basın
-2. Windows Başlangıç klasörü açılacaktır
-3. Projenizdeki `start-server.bat` dosyasına sağ tıklayın ve "Kısayol oluştur" seçeneğini seçin
-4. Oluşturulan kısayolu kopyalayın ve az önce açılan Başlangıç klasörüne yapıştırın
-5. Bilgisayarı yeniden başlattığınızda sunucu otomatik olarak çalışacaktır
+1. Clone this repository
+2. Install dependencies:
+   ```
+   npm install
+   ```
+3. Configure your settings in `config.json`
 
-### Yöntem 2: Görev Zamanlayıcısı Kullanımı
+## Automatic Startup Settings
 
-1. `Win + R` tuşlarına basın ve `taskschd.msc` yazıp Enter'a basın
-2. "Basit Görev Oluştur" seçeneğine tıklayın
-3. Görev için bir isim verin (örn. "Automation Server")
-4. "Bilgisayar başladığında" seçeneğini seçin
-5. "Program başlat" eylemini seçin
-6. "Gözat" butonuna tıklayın ve `start-server.bat` dosyasının yolunu seçin
-7. "Bitti" butonuna tıklayın
+To start the server automatically when your computer boots:
 
-## Kullanım
+### Method 1: Add Shortcut to Windows Startup Folder
 
-1. VS Code ve Spotify otomatik başlatmak için:
+1. Press `Win + R` and type `shell:startup` then press Enter
+2. The Windows Startup folder will open
+3. Right-click on the `start-server.bat` file in your project and select "Create shortcut"
+4. Copy the created shortcut and paste it into the Startup folder you just opened
+5. When you restart your computer, the server will start automatically
+
+### Method 2: Using Task Scheduler
+
+1. Press `Win + R` and type `taskschd.msc` then press Enter
+2. Click on "Create Basic Task"
+3. Give the task a name (e.g., "Automation Server")
+4. Select "When the computer starts" option
+5. Choose "Start a program" action
+6. Click the "Browse" button and select the path to the `start-server.bat` file
+7. Click the "Finish" button
+
+### Method 3: Using VBScript
+
+You can also use the included `autostart.vbs` script, which will run the server in the background without showing a command window.
+
+## Usage
+
+The server runs on port 2626 by default (configurable in `config.json`).
+
+1. To automatically start VS Code and Spotify with your configured playlist:
 
    ```
-   http://localhost:5000/automation
+   http://localhost:2626/automation
    ```
 
-2. Sadece VS Code başlatmak için:
+2. To start only VS Code:
    ```
-   http://localhost:5000/open-code
+   http://localhost:2626/open-code
    ```
 
-## Yapılandırma
+## Configuration
 
-Spotify playlist ID'sini değiştirmek için `config.json` dosyasını düzenleyin:
+Edit the `config.json` file to customize your settings:
 
 ```json
 {
-  "playlistId": "SPOTIFY_PLAYLIST_ID"
+  "playlistId": "YOUR_SPOTIFY_PLAYLIST_ID",
+  "port": 2626
 }
 ```
+
+- `playlistId`: The Spotify playlist ID you want to open (the last part of the Spotify playlist URL)
+- `port`: The port number that the server will listen on
