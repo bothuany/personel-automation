@@ -67,7 +67,7 @@ app.get("/open-code", (req, res) => {
 });
 
 // Automation endpoint without query parameters
-app.get("/automation", (req, res) => {
+app.get("/home", (req, res) => {
   const config = getConfig();
   const playlistId = config.playlistId;
 
@@ -84,6 +84,31 @@ app.get("/automation", (req, res) => {
     res.send(
       `VS Code ve Spotify playlist başlatıldı. Playlist ID: ${playlistId}`
     );
+  } catch (err) {
+    console.error("Uygulama başlatılırken hata:", err);
+    res.status(500).send("Uygulamalar başlatılırken hata oluştu.");
+  }
+});
+
+// Work endpoint - opens Microsoft Teams, Visual Studio, and Spotify
+app.get("/work", (req, res) => {
+  const config = getConfig();
+  const playlistId = config.playlistId;
+
+  try {
+    // Show Windows notification
+    showNotification("İş Ortamı Başlatıldı", "Teams, Visual Studio ve Spotify açılıyor...");
+
+    // Open Microsoft Teams without showing command window
+    runHiddenCommand("explorer shell:AppsFolder\\Microsoft.Teams_8wekyb3d8bbwe!Microsoft.Teams");
+
+    // Open Visual Studio without showing command window
+    runHiddenCommand("start \"\" \"C:\\Program Files\\Microsoft Visual Studio\\2022\\Community\\Common7\\IDE\\devenv.exe\"");
+
+    // Open Spotify with the specified playlist without showing command window
+    runHiddenCommand(`explorer spotify:playlist:${playlistId}`);
+
+    res.send(`Microsoft Teams, Visual Studio ve Spotify playlist başlatıldı. Playlist ID: ${playlistId}`);
   } catch (err) {
     console.error("Uygulama başlatılırken hata:", err);
     res.status(500).send("Uygulamalar başlatılırken hata oluştu.");
