@@ -4,6 +4,7 @@ const fs = require("fs");
 const path = require("path");
 const notifier = require("node-notifier");
 const app = express();
+require('dotenv').config(); // Load environment variables from .env file
 
 // Read config from file
 const getConfig = () => {
@@ -26,40 +27,15 @@ const PORT = config.port || 2626;
 // Function to kill any process using the specified port
 const killProcessOnPort = (port) => {
   return new Promise((resolve, reject) => {
-    // For Windows, find and kill the process using the specified port
-    const findCommand = `netstat -ano | findstr :${port}`;
-    exec(findCommand, (error, stdout, stderr) => {
-      if (error || stderr) {
-        console.log(`No process found on port ${port} or error occurred.`);
-        resolve(); // Continue even if no process found or error
-        return;
+    // Use PowerShell command to directly find and kill process on port
+    const killCommand = `powershell -Command "try { Stop-Process -Id (Get-NetTCPConnection -LocalPort ${port}).OwningProcess -Force -ErrorAction Stop; Write-Host 'Successfully killed process on port ${port}' } catch { Write-Host 'No process found on port ${port} or failed to kill: $_' }"`;
+    
+    exec(killCommand, (error, stdout, stderr) => {
+      console.log(stdout.trim());
+      if (stderr) {
+        console.error(`Error while killing process on port ${port}:`, stderr);
       }
-
-      // Extract PID from netstat output
-      const lines = stdout.trim().split('\n');
-      if (lines.length > 0) {
-        const pidMatch = lines[0].match(/\s+(\d+)$/);
-        if (pidMatch && pidMatch[1]) {
-          const pid = pidMatch[1];
-          console.log(`Found process with PID ${pid} on port ${port}, attempting to kill...`);
-          
-          // Kill the process
-          exec(`taskkill /F /PID ${pid}`, (killError, killStdout, killStderr) => {
-            if (killError || killStderr) {
-              console.error(`Failed to kill process on port ${port}:`, killError || killStderr);
-            } else {
-              console.log(`Successfully killed process on port ${port}`);
-            }
-            resolve(); // Continue regardless of kill result
-          });
-        } else {
-          console.log(`Could not extract PID from netstat output for port ${port}`);
-          resolve();
-        }
-      } else {
-        console.log(`No process found using port ${port}`);
-        resolve();
-      }
+      resolve(); // Continue regardless of kill result
     });
   });
 };
@@ -167,6 +143,113 @@ app.get("/work", (req, res) => {
   } catch (err) {
     console.error("Uygulama başlatılırken hata:", err);
     res.status(500).send("Uygulamalar başlatılırken hata oluştu.");
+  }
+});
+
+// VPN connection endpoint - opens the specified portal and enters credentials
+app.post("/vpn", (req, res) => {
+  const domainType = req.body.domain || "tradesoft"; // Default to tradesoft if not specified
+  const otpCode = req.body.otp || ""; // OTP code from request body
+  
+  console.log("domainType: " + domainType);
+  console.log("otpCode: " + otpCode);
+  
+  try {
+    // Set credentials based on VPN type
+    let username, password, portalName;
+    if (domainType.toLowerCase() === "tradesoft") {
+      username = process.env.TRADESOFT_USERNAME;
+      password = process.env.TRADESOFT_PASSWORD;
+      portalName = "Tradesoft VPN";
+    } else if (domainType.toLowerCase() === "ata") {
+      username = process.env.ATA_USERNAME;
+      password = process.env.ATA_PASSWORD;
+      portalName = "ATA VPN";
+    } else {
+      throw new Error("Geçersiz domain tipi " + domainType);
+    }
+
+    // Check if credentials are available
+    if (!username || !password) {
+      throw new Error(`${domainType} VPN için kimlik bilgileri bulunamadı. .env dosyasını kontrol edin.`);
+    }
+
+    console.log("username: " + username);
+    console.log("password: " + password);
+
+    // Show Windows notification
+    //showNotification("VPN Bağlantısı", `${portalName} bağlantısı başlatılıyor...`);
+
+    // Create a temporary PowerShell script to automate the GlobalProtect VPN login
+    const scriptPath = path.join(__dirname, "vpn_login.ps1");
+    const scriptContent = `
+# Start GlobalProtect VPN client if not already running
+$gpProcess = Get-Process -Name "PanGPA" -ErrorAction SilentlyContinue
+if ($null -eq $gpProcess) {
+    Start-Process "C:\\Program Files\\Palo Alto Networks\\GlobalProtect\\PanGPA.exe"
+    Start-Sleep -Seconds 2
+}
+
+# Using SendKeys to automate the form filling
+Add-Type -AssemblyName System.Windows.Forms
+
+# Click on the GlobalProtect icon in system tray to open it
+[System.Windows.Forms.SendKeys]::SendWait("^{ESC}")
+Start-Sleep -Seconds 1
+[System.Windows.Forms.SendKeys]::SendWait("GlobalProtect")
+Start-Sleep -Seconds 1
+[System.Windows.Forms.SendKeys]::SendWait("{ENTER}")
+Start-Sleep -Seconds 2
+# Skip portal selection and just press ENTER to continue
+[System.Windows.Forms.SendKeys]::SendWait("{ENTER}")
+Start-Sleep -Seconds 2
+
+[System.Windows.Forms.SendKeys]::SendWait("{TAB}")
+[System.Windows.Forms.SendKeys]::SendWait("{TAB}")
+[System.Windows.Forms.SendKeys]::SendWait("{TAB}")
+[System.Windows.Forms.SendKeys]::SendWait("{TAB}")
+# Enter username and password
+[System.Windows.Forms.SendKeys]::SendWait("${username}")
+Start-Sleep -Seconds 1
+[System.Windows.Forms.SendKeys]::SendWait("{TAB}")
+Start-Sleep -Seconds 1
+[System.Windows.Forms.SendKeys]::SendWait("${password}")
+Start-Sleep -Seconds 2
+[System.Windows.Forms.SendKeys]::SendWait("{ENTER}")
+Start-Sleep -Seconds 7
+[System.Windows.Forms.SendKeys]::SendWait("${otpCode}")
+Start-Sleep -Seconds 1
+[System.Windows.Forms.SendKeys]::SendWait("{ENTER}")
+    `;
+
+    fs.writeFileSync(scriptPath, scriptContent);
+
+    // Execute the PowerShell script with hidden window
+    runHiddenCommand(`powershell -ExecutionPolicy Bypass -File "${scriptPath}"`);
+
+    // Delete the temporary script after a delay
+    setTimeout(() => {
+      try {
+        fs.unlinkSync(scriptPath);
+      } catch (err) {
+        console.error("Geçici script dosyası silinemedi:", err);
+      }
+    }, 10000);
+
+    let responseMessage = `${portalName} bağlantısı başlatıldı.`;
+    if (otpCode) {
+      responseMessage += ` OTP kodu (${otpCode}) otomatik olarak girildi.`;
+    } else {
+      responseMessage += ` OTP kodu elle girilmeli.`;
+    }
+
+    // Show notification about credentials
+    //showNotification("VPN Bilgileri", responseMessage);
+
+    res.send(responseMessage);
+  } catch (err) {
+    console.error("VPN bağlantısı başlatılırken hata:", err);
+    res.status(500).send("VPN bağlantısı başlatılırken hata oluştu: " + err.message);
   }
 });
 
